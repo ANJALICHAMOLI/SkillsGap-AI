@@ -20,8 +20,24 @@ ACCESS_TOKEN_MINUTES = 15
 REFRESH_TOKEN_DAYS = 30
 password_hash = PasswordHash.recommended()
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "").strip()
+PLACEHOLDER_SECRETS = {
+    "replace-with-a-long-random-secret",
+    "change-me",
+    "your-secret-key",
+}
+
+if JWT_SECRET_KEY and (
+    len(JWT_SECRET_KEY) < 32
+    or JWT_SECRET_KEY.lower() in PLACEHOLDER_SECRETS
+    or JWT_SECRET_KEY.lower().startswith("replace-with-")
+):
+    raise RuntimeError("JWT_SECRET_KEY must be a non-placeholder value of at least 32 characters.")
+
 if not JWT_SECRET_KEY:
+    if APP_ENV == "production":
+        raise RuntimeError("JWT_SECRET_KEY must be set when APP_ENV=production.")
     JWT_SECRET_KEY = secrets.token_urlsafe(48)
     warnings.warn(
         "JWT_SECRET_KEY is unset; authentication tokens will become invalid when the server restarts. "
