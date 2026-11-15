@@ -4,13 +4,14 @@ import re
 from datetime import datetime, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from backend.app import auth, models
 from backend.app.database import SessionLocal
+from backend.app.rate_limits import limiter
 
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
@@ -98,7 +99,8 @@ def get_current_user(
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(credentials: Credentials, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, credentials: Credentials, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter_by(email=credentials.email).first()
     if existing:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
@@ -121,7 +123,8 @@ def register(credentials: Credentials, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(credentials: Credentials, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, credentials: Credentials, db: Session = Depends(get_db)):
     user = db.query(models.User).filter_by(email=credentials.email).first()
     if user is None or not auth.verify_password(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
