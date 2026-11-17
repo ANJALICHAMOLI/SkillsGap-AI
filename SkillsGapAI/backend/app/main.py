@@ -7,17 +7,22 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from backend.app import models
 from backend.app.ai_service import generate_personalized_roadmap
 from backend.app.auth_routes import get_current_user, router as auth_router
 from backend.app.database import Base, SessionLocal, engine
 from backend.app.role_skills import ROLE_SKILLS
+from backend.app.rate_limits import limiter
 from backend.app.roles_data import TRACKS
 from backend.app.skill_analyzer import analyze_resume
 
 
 app = FastAPI(title="SkillGap AI")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(auth_router)
 
 Base.metadata.create_all(bind=engine)
