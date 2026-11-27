@@ -533,3 +533,50 @@ body.in-app:has(#p-home.active) .nav-i.active{background:#38354d;border-left-col
 @media(max-width:700px){#p-roadmap .rm{padding:24px 0 35px}#p-roadmap .rm:before{left:34px}#p-roadmap .rm-item,#p-roadmap .rm-item:nth-child(even){width:100%;margin:0 0 23px;padding:0 0 0 84px}#p-roadmap .rm-level-marker,#p-roadmap .rm-item:nth-child(even) .rm-level-marker{left:0;right:auto;transform:rotate(-6deg)}#p-roadmap .rm-item.now .rm-level-marker{transform:rotate(-6deg)}#p-roadmap .rm-h{min-height:90px;padding:12px}#p-roadmap .rm-h .tag{display:none}}
 .career-chat-roadmap-link{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:9px 12px;border:1px solid #9c87ed;border-radius:7px;background:#eee8ff;color:#33235e;font-size:12px;font-weight:700;cursor:pointer}
 .career-chat-roadmap-link:after{content:'↗';font-size:15px}.career-chat-roadmap-link:hover{background:#ddd2ff}
+
+/* Give the learning path its own game-board surface and keep inline SVGs contained. */
+body.in-app:has(#p-roadmap.active) .page-wrap:has(#p-roadmap.active){
+  background-color:#171621;
+  background-image:radial-gradient(ellipse at 50% 8%,rgba(145,116,224,.16),transparent 46%),
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  color:#f5f2fb;background-size:auto,28px 28px,28px 28px
+}
+#p-roadmap>.page-head{align-items:flex-end;border-bottom:1px solid #484458;padding-bottom:18px;margin-bottom:20px}
+#p-roadmap>.page-head h1{color:#f5f2fb;font-size:clamp(28px,3vw,38px)}
+#p-roadmap>.page-head p{color:#aaa4ba}
+#p-roadmap>.page-head .btn{background:#292738;border-color:#555168;color:#f5f2fb}
+#p-roadmap>.page-head .btn-primary{background:#d3f66e;border-color:#d3f66e;color:#211f18}
+#p-roadmap>#rmStats .kpi{background:#242234;border-color:#48445d;color:#f5f2fb;box-shadow:0 5px 0 #13121b}
+#p-roadmap>#rmStats .lbl,#p-roadmap>#rmStats .sub{color:#aaa4ba}
+#p-roadmap>#rmStats .bar{background:#171621;border-color:#77718a}
+#p-roadmap>#rmStats .bar>i{background:#d3f66e}
+#p-roadmap .rm{max-width:980px;padding-top:34px}
+#p-roadmap .rm:before{left:50%;border-left:4px dashed rgba(178,157,255,.58);background:none}
+#p-roadmap .rm-item{min-height:126px;margin-bottom:30px}
+#p-roadmap .rm-level-marker{width:76px;height:76px;min-width:76px;padding:0;line-height:1;overflow:visible}
+#p-roadmap .rm-level-marker span{display:block;font-size:8px;line-height:1.2}
+#p-roadmap .rm-level-marker b{display:block;font-size:25px;line-height:1}
+#p-roadmap .rm-level-marker svg{display:block!important;width:15px!important;height:15px!important;min-width:15px;max-width:15px;position:absolute;right:0;top:0;padding:2px}
+#p-roadmap .rm-card{min-width:0;border-radius:15px}
+#p-roadmap .rm-h{width:100%;min-height:104px;display:flex;align-items:center;gap:12px}
+#p-roadmap .rm-h>.ico-sq{width:36px;height:36px;flex:0 0 36px;background:#373448;color:#d4cef0}
+#p-roadmap .rm-h>.ico-sq svg{display:block!important;width:17px!important;height:17px!important;max-width:17px}
+#p-roadmap .rm-h h3{color:#f5f2fb;font-size:17px}
+#p-roadmap .rm-h .eyebrow,#p-roadmap .rm-h .meta{color:#aaa4ba}
+#p-roadmap .rm-h .tag{flex:none}
+#p-roadmap .rm-h .caret{display:block!important;width:16px!important;height:16px!important;min-width:16px;max-width:16px;flex:0 0 16px}
+#p-roadmap .rm-item.now .rm-card{background:#29263d}
+#p-roadmap .rm-b{color:#e9e5f2}
+#p-roadmap .rm-b .eyebrow{color:#c1bad3}
+#p-roadmap .rm-b p{color:#c4bed1!important}
+#p-roadmap .rm-b .btn{background:#343148;border-color:#5a5570;color:#f5f2fb}
+#p-roadmap .rm-item.locked .rm-card{opacity:.78}
+@media(max-width:700px){
+  body.in-app:has(#p-roadmap.active) .page-wrap:has(#p-roadmap.active){background-size:auto,22px 22px,22px 22px}
+  #p-roadmap>.page-head{align-items:flex-start;flex-direction:column}
+  #p-roadmap>#rmStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #p-roadmap .rm-item{min-height:105px}
+  #p-roadmap .rm-level-marker{width:68px;height:68px;min-width:68px}
+  #p-roadmap .rm-h{min-height:92px}
+}
