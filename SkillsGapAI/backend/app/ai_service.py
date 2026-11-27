@@ -143,7 +143,7 @@ def extract_resume_with_gemini(
     bounded_text = resume_text[:20000]
     allowed = ", ".join(allowed_skills)
 
-    
+
     prompt = f"""
 You are an evidence-based resume analysis engine.
 
