@@ -1138,6 +1138,27 @@ async function apiFetch(url, options = {}) {
   }
   return response;
 }
+function authApiErrorMessage(data, fallback) {
+  const detail = data?.detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.map(issue => {
+      if (!issue || typeof issue !== "object") return String(issue);
+      const field = Array.isArray(issue.loc)
+        ? issue.loc.filter(part => part !== "body").join(".")
+        : "";
+      const message = issue.msg || "Invalid value";
+      return field ? `${field}: ${message}` : message;
+    }).filter(Boolean);
+    return messages.join("; ") || fallback;
+  }
+  return typeof detail === "string" && detail ? detail : fallback;
+}
+function authConnectionError(error) {
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+    return "Cannot reach the backend. Start the API server and try again.";
+  }
+  return error.message || "Could not connect to the backend.";
+}
 async function handleLogin() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
@@ -1151,12 +1172,12 @@ async function handleLogin() {
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Login failed.");
+    if (!response.ok) throw new Error(authApiErrorMessage(data, "Login failed."));
     saveAuthSession(data);
     status.textContent = "Login successful.";
     await openRolePicker(true);
   } catch (error) {
-    status.textContent = error.message || "Could not connect to the backend.";
+    status.textContent = authConnectionError(error);
   } finally { button.disabled = false; }
 }
 async function handleRegister() {
@@ -1177,13 +1198,13 @@ async function handleRegister() {
       body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Registration failed.");
+    if (!response.ok) throw new Error(authApiErrorMessage(data, "Registration failed."));
     saveAuthSession(data);
     applyAccountIdentity();
     status.textContent = "Account created.";
     await openRolePicker(true);
   } catch (error) {
-    status.textContent = error.message || "Could not connect to the backend.";
+    status.textContent = authConnectionError(error);
   } finally { button.disabled = false; }
 }
 async function handleLogout() {
