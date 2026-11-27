@@ -1,22 +1,23 @@
 from io import BytesIO
 from pathlib import Path
+import re
 
 import pymupdf
 from docx import Document
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from backend.app import models
-from backend.app.ai_service import generate_personalized_roadmap
-from backend.app.auth_routes import get_current_user, router as auth_router
+from backend.app.ai_service import generate_career_chat_reply, generate_personalized_roadmap, search_learning_resources
+from backend.app.auth_routes import get_current_user, get_db, router as auth_router
 from backend.app.database import Base, SessionLocal, engine
 from backend.app.role_skills import ROLE_SKILLS
 from backend.app.rate_limits import limiter
-from backend.app.roles_data import TRACKS
+from backend.app.roles_data import JOB_ROLES, TRACKS
 from backend.app.skill_analyzer import analyze_resume
 
 
@@ -44,6 +45,53 @@ class RoadmapRequest(BaseModel):
     duration_weeks: int = Field(default=6, ge=2, le=16)
 
 
+class ChatMessage(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class ChatRoadmapWeek(BaseModel):
+    week: int = Field(ge=1, le=16)
+    focus: str = Field(min_length=1, max_length=160)
+    skills: list[str] = Field(default_factory=list, max_length=12)
+    tasks: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("skills", "tasks")
+    @classmethod
+    def bound_context_items(cls, values):
+        if any(len(value) > 180 for value in values):
+            raise ValueError("Roadmap context items must be 180 characters or shorter.")
+        return values
+
+
+class CareerChatRequest(BaseModel):
+    role_key: str | None = None
+    messages: list[ChatMessage] = Field(min_length=1, max_length=16)
+    roadmap_context: list[ChatRoadmapWeek] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def validate_history(self):
+        if self.messages[0].role != "user" or self.messages[-1].role != "user":
+            raise ValueError("Chat history must begin and end with a user message.")
+        if any(left.role == right.role for left, right in zip(self.messages, self.messages[1:])):
+            raise ValueError("Chat messages must alternate between user and assistant.")
+        if sum(len(message.content) for message in self.messages) > 12000:
+            raise ValueError("Chat history must be 12,000 characters or shorter.")
+        context_size = sum(
+            len(week.focus) + sum(map(len, week.skills)) + sum(map(len, week.tasks))
+            for week in self.roadmap_context
+        )
+        if context_size > 12000:
+            raise ValueError("Roadmap context must be 12,000 characters or shorter.")
+        return self
+
+
+class StudyMaterialsRequest(BaseModel):
+    role: str = Field(min_length=2, max_length=120)
+    skill: str = Field(default="", max_length=120)
+    query: str = Field(default="", max_length=200)
+
+
 @app.get("/")
 def home():
     return {"message": "Welcome to SkillGap AI"}
@@ -52,6 +100,69 @@ def home():
 @app.get("/api/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.post("/api/study-materials")
+@limiter.limit("6/minute")
+def study_materials(
+    request: Request,
+    body: StudyMaterialsRequest,
+    current_user: models.User = Depends(get_current_user),
+):
+    # Free-text roles are intentionally accepted so users are not limited to the demo catalog.
+    role = " ".join(body.role.split())
+    if not any(character.isalpha() for character in role):
+        raise HTTPException(status_code=422, detail="Enter a valid target role.")
+    try:
+        resources = search_learning_resources(role, body.skill.strip(), body.query.strip())
+    except RuntimeError as exc:
+        if "not configured" in str(exc):
+            raise HTTPException(status_code=503, detail="Gemini is not configured on the backend.") from exc
+        if "quota or rate limit" in str(exc):
+            raise HTTPException(status_code=503, detail="Gemini API quota is currently exhausted. Check the key's API quota or billing, then try again.") from exc
+        raise HTTPException(status_code=502, detail="Live search returned no usable source links. Try a more specific skill.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not fetch live study materials. Please try again.") from exc
+    return {"role": role, "skill": body.skill.strip(), "resources": resources}
+
+
+@app.post("/api/chat")
+@limiter.limit("10/minute")
+def career_chat(
+    request: Request,
+    body: CareerChatRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not body.role_key or body.role_key not in ROLE_SKILLS:
+        raise HTTPException(status_code=400, detail="Select a supported target role before chatting.")
+
+    role = next((item for item in JOB_ROLES if item["key"] == body.role_key), None)
+    role_name = role["name"] if role else body.role_key.replace("_", " ").title()
+    profile = db.get(models.UserProfile, current_user.id)
+    user_name = " ".join((profile.first_name, profile.last_name)).strip() if profile else ""
+    try:
+        reply = generate_career_chat_reply(
+            messages=[message.model_dump() for message in body.messages],
+            role_name=role_name,
+            allowed_skills=ROLE_SKILLS[body.role_key],
+            user_name=user_name,
+            roadmap_context=[week.model_dump() for week in body.roadmap_context],
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
+        if "GEMINI_API_KEY is not configured" in detail:
+            raise HTTPException(status_code=503, detail="Gemini is not configured on the backend.") from exc
+        if "quota or rate limit" in detail:
+            raise HTTPException(status_code=503, detail="Gemini API quota is currently exhausted. Check the key's API quota or billing, then try again.") from exc
+        raise HTTPException(status_code=503, detail="Gemini is temporarily unavailable. Please try again.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Gemini could not complete this reply. Please try again.") from exc
+
+    last_message = body.messages[-1].content
+    roadmap_request = bool(re.search(r"\b(roadmap|learning path|study plan|learning plan)\b", last_message, re.I))
+    action = {"route": "roadmap", "label": "Open your roadmap"} if roadmap_request else None
+    return {"reply": reply, "role_key": body.role_key, "action": action}
 
 
 def role_to_dict(role):

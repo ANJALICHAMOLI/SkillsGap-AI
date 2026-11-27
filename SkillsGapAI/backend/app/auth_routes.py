@@ -40,6 +40,32 @@ class Credentials(BaseModel):
         return normalized
 
 
+class RegistrationRequest(Credentials):
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Enter your first and last name")
+        return normalized
+
+
+class NameUpdateRequest(BaseModel):
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Enter your first and last name")
+        return normalized
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=32, max_length=256)
 
@@ -70,6 +96,8 @@ class UserResponse(BaseModel):
     id: int
     email: str
     created_at: datetime
+    first_name: str = ""
+    last_name: str = ""
 
 
 class TokenResponse(BaseModel):
@@ -97,10 +125,17 @@ def issue_tokens(user: models.User, db: Session) -> TokenResponse:
     )
     db.add(session)
     db.commit()
+    profile = db.get(models.UserProfile, user.id)
     return TokenResponse(
         access_token=auth.create_access_token(user.id, session.id),
         refresh_token=refresh_token,
-        user=user,
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            created_at=user.created_at,
+            first_name=profile.first_name if profile else "",
+            last_name=profile.last_name if profile else "",
+        ),
     )
 
 
@@ -165,7 +200,7 @@ def get_current_user(user: models.User = Depends(get_authenticated_user), db: Se
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
-def register(request: Request, credentials: Credentials, db: Session = Depends(get_db)):
+def register(request: Request, credentials: RegistrationRequest, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter_by(email=credentials.email).first()
     if existing:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
@@ -184,6 +219,11 @@ def register(request: Request, credentials: Credentials, db: Session = Depends(g
         if db.query(models.User).filter_by(email=credentials.email).first():
             raise HTTPException(status_code=409, detail="An account with this email already exists")
         raise
+    db.add(models.UserProfile(
+        user_id=user.id,
+        first_name=credentials.first_name,
+        last_name=credentials.last_name,
+    ))
     if auth_email_is_configured():
         try:
             verification_token = issue_action_token(user, "verify_email", db)
@@ -251,8 +291,38 @@ def logout(request: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def me(current_user: models.User = Depends(get_current_user)):
-    return current_user
+def me(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.get(models.UserProfile, current_user.id)
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        created_at=current_user.created_at,
+        first_name=profile.first_name if profile else "",
+        last_name=profile.last_name if profile else "",
+    )
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    body: NameUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = db.get(models.UserProfile, current_user.id)
+    if profile is None:
+        profile = models.UserProfile(user_id=current_user.id, first_name=body.first_name, last_name=body.last_name)
+        db.add(profile)
+    else:
+        profile.first_name = body.first_name
+        profile.last_name = body.last_name
+    db.commit()
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        created_at=current_user.created_at,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+    )
 
 
 @router.post("/verify-email/request", status_code=status.HTTP_202_ACCEPTED)

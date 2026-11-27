@@ -1064,10 +1064,16 @@ function toggleTheme(){setTheme(document.documentElement.getAttribute('data-them
 function go(id){
   $$('.page').forEach(p=>p.classList.toggle('active',p.id==='p-'+id));
   $$('.nav-i[data-go]').forEach(n=>n.classList.toggle('active',n.dataset.go===id));
-  document.body.classList.remove('nav-open'); window.scrollTo(0,0); chartsFor(id);
+  document.body.classList.remove('nav-open'); window.scrollTo(0,0);
+  const main=$('.main'),wrap=$('.page-wrap');
+  if(main)main.scrollTop=0;if(wrap)wrap.scrollTop=0;
+  document.documentElement.scrollTop=0;document.body.scrollTop=0;
+  chartsFor(id);
+  if(id==='study')renderStudy();
+  if(id==='home')startHomeGallery();else stopHomeGallery();
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)go(b.dataset.go)});
-function showLanding(){document.body.classList.remove('in-app');$$('.mkview').forEach(v=>v.style.display='none');$('#v-landing').style.display='';window.scrollTo(0,0)}
+function showLanding(){stopHomeGallery();document.body.classList.remove('in-app');$$('.mkview').forEach(v=>v.style.display='none');$('#v-landing').style.display='';window.scrollTo(0,0)}
 function showAuth(w){document.body.classList.remove('in-app');$$('.mkview').forEach(v=>v.style.display='none');$('#v-'+w).style.display='';window.scrollTo(0,0)}
 
 /* ================= role picker ================= */
@@ -1079,14 +1085,35 @@ const REFRESH_TOKEN_KEY = "skillgap_refresh_token";
 let API_ROLE_CATALOG = [];
 
 function saveAuthSession(data) {
+  const previousUser=currentAccount();
   localStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
   localStorage.setItem(REFRESH_TOKEN_KEY, data.refresh_token);
   localStorage.setItem("skillgap_user", JSON.stringify(data.user || {}));
+  const fullName = [data.user?.first_name, data.user?.last_name].filter(Boolean).join(" ").trim();
+  if (fullName) localStorage.setItem("skillgap_display_name", fullName);
+  else if(previousUser.email&&previousUser.email!==data.user?.email) localStorage.removeItem("skillgap_display_name");
 }
 function clearAuthSession() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem("skillgap_user");
+  localStorage.removeItem("skillgap_display_name");
+}
+function currentAccount(){
+  try{return JSON.parse(localStorage.getItem("skillgap_user")||"{}")}catch{return{}}
+}
+function applyAccountIdentity(){
+  const user=currentAccount();
+  const savedName=[user.first_name,user.last_name].filter(Boolean).join(" ").trim()||localStorage.getItem("skillgap_display_name")||"";
+  const email=user.email||"";
+  if(!savedName&&!email)return;
+  const parts=savedName?savedName.split(/\s+/):[(email.split("@")[0]||"Career explorer")];
+  const first=parts[0]||"Career explorer", last=parts.slice(1).join(" ");
+  const initials=(first[0]||"S")+(last[0]||"");
+  Object.values(ROLES).forEach(role=>{
+    role.persona.first=first; role.persona.last=last; role.persona.ini=initials.toUpperCase();
+    if(email)role.persona.email=email;
+  });
 }
 async function apiFetch(url, options = {}) {
   const send = () => {
@@ -1111,6 +1138,32 @@ async function apiFetch(url, options = {}) {
   }
   return response;
 }
+function authApiErrorMessage(data, fallback) {
+  const detail = data?.detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.map(issue => {
+      if (typeof issue === "string") return issue;
+      if (!issue || typeof issue !== "object") return "";
+      const field = Array.isArray(issue.loc)
+        ? issue.loc.filter(part => part !== "body").join(".")
+        : "";
+      const message = issue.msg || issue.message || "Invalid value";
+      return field ? `${field}: ${message}` : message;
+    }).filter(Boolean);
+    return messages.join("; ") || fallback;
+  }
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") {
+    return detail.message || detail.msg || fallback;
+  }
+  return fallback;
+}
+function authConnectionError(error) {
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+    return "Cannot reach the backend. Start the API server and try again.";
+  }
+  return error.message || "Could not connect to the backend.";
+}
 async function handleLogin() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
@@ -1124,39 +1177,39 @@ async function handleLogin() {
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Login failed.");
+    if (!response.ok) throw new Error(authApiErrorMessage(data, "Login failed."));
     saveAuthSession(data);
     status.textContent = "Login successful.";
     await openRolePicker(true);
   } catch (error) {
-    status.textContent = error.message || "Could not connect to the backend.";
+    status.textContent = authConnectionError(error);
   } finally { button.disabled = false; }
 }
 async function handleRegister() {
   const email = document.getElementById("signupEmail").value.trim();
   const password = document.getElementById("signupPassword").value;
+  const firstName = document.getElementById("signupFirstName").value.trim();
+  const lastName = document.getElementById("signupLastName").value.trim();
   const status = document.getElementById("signupStatus");
   const button = document.getElementById("signupBtn");
-  if (!email || password.length < 8) {
-    status.textContent = "Enter a valid email and a password of at least 8 characters.";
+  if (!firstName || !lastName || !email || password.length < 8) {
+    status.textContent = "Enter your first and last name, a valid email, and a password of at least 8 characters.";
     return;
   }
   button.disabled = true; status.textContent = "Creating your account...";
   try {
     const response = await fetch(API_BASE_URL + "/api/auth/register", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Registration failed.");
+    if (!response.ok) throw new Error(authApiErrorMessage(data, "Registration failed."));
     saveAuthSession(data);
-    const first = document.getElementById("signupFirstName").value.trim();
-    const last = document.getElementById("signupLastName").value.trim();
-    localStorage.setItem("skillgap_display_name", [first, last].filter(Boolean).join(" "));
+    applyAccountIdentity();
     status.textContent = "Account created.";
     await openRolePicker(true);
   } catch (error) {
-    status.textContent = error.message || "Could not connect to the backend.";
+    status.textContent = authConnectionError(error);
   } finally { button.disabled = false; }
 }
 async function handleLogout() {
@@ -1300,7 +1353,7 @@ function confirmRole() {
   }
 
   document.body.classList.add("in-app");
-  go("dashboard");
+  go("home");
 
   toast(
     changed ? "Notebook rebuilt" : "Welcome back",
@@ -1313,8 +1366,28 @@ function confirmRole() {
 function switchRole(k){RK=k;loadRole();go($('.page.active').id.slice(2));toast('Role changed',`Scored against ${R.name} postings now.`)}
 function switchRoleFromGap(){switchRole($('#gapRole').value)}
 
+let homeSlide=0,homeSlideTimer=null;
+function startHomeGallery(){
+  const track=$('#p-home .home-image-track');
+  if(!track)return;
+  stopHomeGallery();
+  const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dots=$$('#p-home .home-slider-dots i');
+  const showSlide=()=>{
+    if(!$('#p-home').classList.contains('active'))return;
+    homeSlide=(homeSlide+1)%3;
+    track.style.transform=`translateX(-${homeSlide*33.3333}%)`;
+    dots.forEach((dot,i)=>dot.classList.toggle('on',i===homeSlide));
+  };
+  track.style.transform=`translateX(-${homeSlide*33.3333}%)`;
+  dots.forEach((dot,i)=>dot.classList.toggle('on',i===homeSlide));
+  if(!reducedMotion)homeSlideTimer=window.setInterval(showSlide,4200);
+}
+function stopHomeGallery(){if(homeSlideTimer){window.clearInterval(homeSlideTimer);homeSlideTimer=null}}
+
 /* ================= load a role ================= */
 function loadRole(){
+  applyAccountIdentity();
   R=ROLES[RK];
   SK=R.skills.map(s=>({n:s[0],have:s[1],need:s[2]}));
   RM=R.roadmap.map(m=>({t:m[0],diff:m[1],h:m[2],pre:m[3],skills:m[4].split('|'),d:m[5],res:m[6].split('|'),
@@ -1428,7 +1501,7 @@ function renderProfile(){
     <div class="stack">
       <div class="card lift pad" style="text-align:center">
         <span class="avatar" style="width:78px;height:78px;font-size:27px;margin:0 auto">${p.ini}</span>
-        <h2 style="font-size:20px;margin-top:12px">${p.first} ${p.last}</h2>
+        <h2 style="font-size:20px;margin-top:12px">${esc(p.first)} ${esc(p.last)}</h2>
         <p class="muted" style="font-size:13.5px">${p.cur} · ${p.loc}</p>
         <div class="row" style="justify-content:center;gap:6px;margin-top:10px"><span class="tag">${p.exp} experience</span><span class="tag g">Open to offers</span></div>
         <div class="row" style="justify-content:space-around;border-top:1.5px solid var(--line);margin-top:16px;padding-top:14px">
@@ -1449,8 +1522,8 @@ function renderProfile(){
     <div class="stack">
       <div class="panel"><div class="sec-t ruled">Basics</div>
         <div class="f2">
-          <label class="field"><span>Full name</span><input class="inp" value="${p.first} ${p.last}"></label>
-          <label class="field"><span>Email</span><input class="inp" value="${p.email}"></label>
+          <label class="field"><span>Full name</span><input class="inp" id="profileFullName" value="${esc(`${p.first} ${p.last}`.trim())}" autocomplete="name"></label>
+          <label class="field"><span>Email</span><input class="inp" value="${esc(p.email)}" readonly></label>
           <label class="field"><span>Phone</span><input class="inp" value="${p.phone}"></label>
           <label class="field"><span>Location</span><input class="inp" value="${p.loc}"></label>
           <label class="field"><span>Current role</span><input class="inp" value="${p.cur}"></label>
@@ -1485,6 +1558,19 @@ function renderProfile(){
     $('#hrsNote').textContent=`At ${h} hour${h===1?'':'s'} a week the remaining work takes about ${wks} week${wks===1?'':'s'}.`;
   });
 }
+async function saveProfile(){
+  const words=$('#profileFullName').value.trim().split(/\s+/).filter(Boolean);
+  if(words.length<2){toast('Add your full name','Enter a first and last name to save your profile.');return;}
+  try{
+    const response=await apiFetch(API_BASE_URL+'/api/auth/me',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({first_name:words.shift(),last_name:words.join(' ')})});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.detail||'Could not save your name.');
+    localStorage.setItem('skillgap_user',JSON.stringify(data));
+    localStorage.setItem('skillgap_display_name',[data.first_name,data.last_name].filter(Boolean).join(' '));
+    loadRole();
+    toast('Profile saved',`Your profile now uses ${data.first_name}'s name.`);
+  }catch(error){toast('Could not save profile',error.message||'Check your connection and try again.');}
+}
 function renderProfSkills(){
   $('#profSkills').innerHTML=SK.map((s,i)=>{const b=band(s);return `<div class="skill-row">
     <div><b style="font-size:13.5px">${s.n}</b><div class="muted" style="font-size:12px">${s.have>=s.need?'At or above the bar':(s.need-s.have)+' points short'}</div></div>
@@ -1513,6 +1599,8 @@ const FIELDS=[
 function buildForm(){
   const d=Object.assign({name:R.persona.first+' '+R.persona.last,email:R.persona.email,phone:R.persona.phone,loc:R.persona.loc,
     links:R.persona.links,summary:R.persona.summary},R.resume);
+  d.name=`${R.persona.first} ${R.persona.last}`.trim();
+  d.email=R.persona.email;
   const fld=(k,l)=>`<label class="field"><span>${l}</span><input class="inp rs" data-k="${k}" value="${esc(d[k]||'')}"></label>`;
   $('#builderForm').innerHTML=`
   <div class="acc open"><button class="acc-h" onclick="acc(this)"><span class="ico-sq"><svg><use href="#i-user"/></svg></span>Personal details<svg class="caret"><use href="#i-right"/></svg></button>
@@ -2058,8 +2146,9 @@ function renderRoadmap(){
     const st=rmStatus(i), icon=st==='done'?'i-check':st==='now'?'i-flame':'i-lock';
     const badge=st==='done'?'<span class="tag g">Finished</span>':st==='now'?'<span class="tag y">This week</span>':'<span class="tag">Later</span>';
     return `<div class="rm-item ${st} ${st==='now'?'open':''}" data-i="${i}">
+      <button type="button" class="rm-level-marker ${st}" aria-label="Level ${i+1}, ${st}" onclick="${st==='locked'?`toast('Level locked','Finish Level ${i} to open this one.')`:`this.closest('.rm-item').classList.toggle('open')`}"><span>LEVEL</span><b>${String(i+1).padStart(2,'0')}</b><svg><use href="#${icon}"/></svg></button>
       <div class="rm-card">
-        <button class="rm-h" onclick="this.closest('.rm-item').classList.toggle('open')">
+        <button class="rm-h" onclick="${st==='locked'?`toast('Level locked','Finish Level ${i} to open this one.')`:`this.closest('.rm-item').classList.toggle('open')`}">
           <span class="ico-sq ${st==='done'?'g':st==='now'?'y':''}"><svg><use href="#${icon}"/></svg></span>
           <span style="flex:1;min-width:0"><span class="eyebrow">Week ${i+1}</span><h3>${m.t}</h3>
             <span class="meta" style="margin-top:3px"><span>${m.h}</span><span>${m.diff}</span><span>${m.tasks.filter(t=>t.done).length} of ${m.tasks.length} done</span></span></span>
@@ -2074,7 +2163,7 @@ function renderRoadmap(){
           <div class="grid g2" style="gap:15px">
             <div><div class="eyebrow" style="margin-bottom:5px">Tasks</div>
               ${m.tasks.map((t,j)=>`<div class="task ${t.done?'done':''}">
-                <button class="cbx" role="checkbox" aria-checked="${t.done}" onclick="tick(${i},${j},this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg></button>
+                <button class="cbx" role="checkbox" aria-checked="${t.done}" ${st==='locked'?'disabled':''} onclick="tick(${i},${j},this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg></button>
                 <span>${t.t}</span></div>`).join('')}</div>
             <div><div class="eyebrow" style="margin-bottom:5px">Resources</div>
               ${m.res.map(r=>`<div class="list-row" style="padding:7px 0"><span class="ico-sq" style="width:26px;height:26px"><svg style="width:12px;height:12px"><use href="#i-book"/></svg></span>
@@ -2104,43 +2193,56 @@ function updateRm(){
 function jumpNow(){const el=$('.rm-item.now');if(el){el.classList.add('open');el.scrollIntoView({behavior:'smooth',block:'center'})}}
 
 /* ================= study ================= */
+let liveStudyResources=[];
 function renderStudy(){
-  const skills=[...new Set(R.lib.map(l=>l[3]))];
-  if($('#stSkill').dataset.role!==RK){
-    $('#stSkill').innerHTML='<option value="">All skills</option>'+skills.map(s=>`<option>${s}</option>`).join('');
-    $('#stSkill').dataset.role=RK;
+  const roleField=$('#stRole');
+  if(roleField&&roleField.dataset.role!==RK){
+    roleField.value=R.name;
+    roleField.dataset.role=RK;
+    liveStudyResources=[];
+    filterStudy();
   }
-  filterStudy();
 }
 function filterStudy(){
-  const tab=$('#stTabs .tab.active').dataset.t, q=$('#stSearch').value.toLowerCase(),
-    sk=$('#stSkill').value, df=$('#stDiff').value, du=$('#stDur').value;
-  const items=R.lib.map(l=>({t:l[0],p:l[1],ty:l[2],sk:l[3],d:l[4],min:l[5],st:l[6],why:l[7],rec:l[8]}))
-    .filter(r=>{
-      if(tab==='rec'?!r.rec:r.ty!==tab)return false;
-      if(q&&!(r.t+' '+r.p+' '+r.sk).toLowerCase().includes(q))return false;
-      if(sk&&r.sk!==sk)return false;
-      if(df&&r.d!==df)return false;
-      if(du==='Under 1 hour'&&r.min>=60)return false;
-      if(du==='1–4 hours'&&(r.min<60||r.min>240))return false;
-      if(du==='Over 4 hours'&&r.min<=240)return false;
-      return true;
-    });
-  $('#stCount').textContent=`${items.length} resource${items.length===1?'':'s'} · ${R.name}`;
+  if(!$('#stGrid'))return;
+  const tab=$('#stTabs .tab.active')?.dataset.t||'all';
+  const items=liveStudyResources.filter(r=>tab==='all'||r.type===tab);
+  $('#stCount').textContent=liveStudyResources.length?`${items.length} live source${items.length===1?'':'s'} · ${$('#stRole').value.trim()}`:'';
   $('#stEmpty').style.display=items.length?'none':'block';
-  $('#stGrid').innerHTML=items.map(r=>{
-    const st=r.st==='done'?'<span class="tag g"><i class="dot"></i>Finished</span>':r.st==='progress'?'<span class="tag y"><i class="dot"></i>Part way</span>':'<span class="tag">Not started</span>';
-    return `<div class="res">
-      <div class="rtype"><svg><use href="#${ICO[r.ty]}"/></svg>${TYPEN[r.ty]}</div>
-      <h3>${r.t}</h3><div class="muted" style="font-size:12.5px;margin-top:-6px">${r.p}</div>
-      <p class="why">${r.why}</p>
-      <div class="meta"><span>${r.sk}</span><span>${r.d}</span><span>${dur(r.min)}</span></div>
-      <div class="between">${st}<button class="btn btn-sm" onclick="toast('${r.st==='done'?'Reopened':'Added to today'}','${r.t.replace(/'/g,'')}')">${r.st==='progress'?'Continue':r.st==='done'?'Revisit':'Start'}</button></div></div>`}).join('');
+  if(!items.length){$('#stGrid').innerHTML='';return}
+  const labels={video:'YouTube',course:'Course',docs:'Documentation',practice:'Practice',article:'Web resource'};
+  $('#stGrid').innerHTML=items.map(r=>`<article class="res">
+      <div class="rtype">${escapeHtml(labels[r.type]||'Web resource')}</div>
+      <h3>${escapeHtml(r.title)}</h3>
+      <p class="why">${escapeHtml(r.source||'Live search result')}</p>
+      <div class="meta"><span>${escapeHtml(r.type==='video'?'Video tutorial':'Live web result')}</span><span>${escapeHtml(r.source||'')}</span></div>
+      <div class="between"><span class="tag">Source link</span><a class="btn btn-sm" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Open source ↗</a></div>
+    </article>`).join('');
 }
-function clearStudy(){$('#stSearch').value='';$('#stSkill').value='';$('#stDiff').value='';$('#stDur').value='';filterStudy()}
+async function fetchStudyMaterials(){
+  const role=$('#stRole').value.trim(),skill=$('#stSkill').value.trim(),query=$('#stSearch').value.trim(),button=$('#stFetch'),empty=$('#stEmpty');
+  if(role.length<2){empty.innerHTML='<h3>Enter a target role</h3><p>Type the role you want to learn for, then search again.</p>';empty.style.display='block';return}
+  button.disabled=true;button.textContent='Searching the web…';
+  empty.innerHTML='<h3>Finding current sources…</h3><p>Gemini is searching for relevant websites and YouTube materials.</p>';empty.style.display='block';$('#stGrid').innerHTML='';$('#stCount').textContent='';
+  try{
+    const response=await apiFetch(API_BASE_URL+'/api/study-materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,skill,query})});
+    const data=await response.json();
+    if(response.status===401)throw new Error('Please sign in to search live study materials.');
+    if(!response.ok)throw new Error(data.detail||'Could not fetch live study materials.');
+    liveStudyResources=Array.isArray(data.resources)?data.resources.filter(r=>r&&typeof r.url==='string'&&r.url.startsWith('https://')):[];
+    filterStudy();
+    if(!liveStudyResources.length){empty.innerHTML='<h3>No usable source links came back</h3><p>Try a more specific skill or role.</p>';empty.style.display='block'}
+  }catch(error){
+    liveStudyResources=[];filterStudy();
+    if((error.message||'').includes('Please sign in'))empty.innerHTML='<h3>Sign in to search live materials</h3><p>Live study sources are available to your account. Your role and skill search will be ready after sign-in.</p><button class="btn btn-primary btn-sm" onclick="showAuth(\'login\')">Log in</button>';
+    else empty.innerHTML='<h3>Could not fetch study materials</h3><p>'+escapeHtml(error.message||'Check your connection and try again.')+'</p>';
+    empty.style.display='block';
+  }finally{button.disabled=false;button.innerHTML='<svg><use href="#i-search"/></svg>Find materials'}
+}
+function clearStudy(){$('#stSearch').value='';$('#stSkill').value='';liveStudyResources=[];filterStudy();$('#stEmpty').innerHTML='<h3>Find learning materials for your next step</h3><p>Enter any role and optionally a skill, then search to fetch current YouTube and web resources.</p>'}
 $('#stTabs').addEventListener('click',e=>{const t=e.target.closest('.tab');if(!t)return;
   $$('#stTabs .tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');filterStudy()});
-['stSearch','stSkill','stDiff','stDur'].forEach(id=>{const el=$('#'+id);el.addEventListener('input',filterStudy);el.addEventListener('change',filterStudy)});
+['stRole','stSkill','stSearch'].forEach(id=>$('#'+id)?.addEventListener('keydown',e=>{if(e.key==='Enter')fetchStudyMaterials()}));
 
 /* ================= projects ================= */
 let pjFilter='all';
@@ -2222,8 +2324,8 @@ function renderHeat(){
 function renderSettings(){
   const p=R.persona;
   $('#setAcct').innerHTML=`
-   <label class="field"><span>Full name</span><input class="inp" value="${p.first} ${p.last}"></label>
-   <label class="field"><span>Email</span><input class="inp" value="${p.email}"></label>
+   <label class="field"><span>Full name</span><input class="inp" value="${esc(`${p.first} ${p.last}`.trim())}" readonly></label>
+   <label class="field"><span>Email</span><input class="inp" value="${esc(p.email)}" readonly></label>
    <label class="field"><span>Phone</span><input class="inp" value="${p.phone}"></label>
    <label class="field"><span>Time zone</span><select class="inp"><option>Asia/Kolkata (GMT+5:30)</option><option>Asia/Dubai (GMT+4)</option><option>Europe/London (GMT+1)</option></select></label>`;
   $('#notifList').innerHTML=[
@@ -2386,8 +2488,7 @@ if (globalSearch) {
         x.classList.toggle('active', i === 0);
       });
 
-      filterStudy();
-      toast('Searching the library', 'Showing matches for "' + query + '".');
+      fetchStudyMaterials();
       e.target.value = '';
     }
   });
@@ -2420,6 +2521,67 @@ if (dz) {
 loadRole();
 renderGv();
 loadResumeRoleOptions();
+initCareerChat();
+
+let careerChatHistory=[];
+function addCareerChatMessage(role, content, action=null, pending=false){
+  const item=document.createElement('div');
+  item.className=`career-chat-message ${role}${pending?' pending':''}`;
+  item.textContent=content;
+  if(action?.route==='roadmap'){
+    const link=document.createElement('button');
+    link.type='button'; link.className='career-chat-roadmap-link';
+    link.textContent=action.label||'Open your roadmap';
+    link.addEventListener('click',()=>{setCareerChatOpen(false);go('roadmap')});
+    item.appendChild(document.createElement('br')); item.appendChild(link);
+  }
+  $('#careerChatMessages').appendChild(item);
+  $('#careerChatMessages').scrollTop=$('#careerChatMessages').scrollHeight;
+  return item;
+}
+function setCareerChatOpen(open){
+  $('#careerChatPanel').hidden=!open;
+  $('#careerChatToggle').setAttribute('aria-expanded',String(open));
+  if(open)$('#careerChatInput').focus();else $('#careerChatToggle').focus();
+}
+function initCareerChat(){
+  const form=$('#careerChatForm');
+  if(!form)return;
+  $('#careerChatToggle').addEventListener('click',()=>setCareerChatOpen($('#careerChatPanel').hidden));
+  $('#careerChatClose').addEventListener('click',()=>setCareerChatOpen(false));
+  $('#careerChatClear').addEventListener('click',()=>{
+    careerChatHistory=[]; $('#careerChatMessages').replaceChildren();
+    addCareerChatMessage('assistant','Hi! Ask me about your target role, skill gaps, interviews, or next steps.');
+  });
+  $('#careerChatInput').addEventListener('keydown',event=>{
+    if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();form.requestSubmit();}
+  });
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const input=$('#careerChatInput'), content=input.value.trim(), send=$('#careerChatSend');
+    if(!content||send.disabled)return;
+    if(!localStorage.getItem(ACCESS_TOKEN_KEY)){
+      addCareerChatMessage('assistant','Please log in to chat with your Gemini career coach.');return;
+    }
+    addCareerChatMessage('user',content); input.value='';
+    careerChatHistory.push({role:'user',content});
+    while(careerChatHistory.length>15)careerChatHistory.splice(0,2);
+    const pending=addCareerChatMessage('assistant','Thinking through that…',null,true);
+    send.disabled=true; send.textContent='…';
+    try{
+      const roadmap_context=RM.map((week,index)=>({week:index+1,focus:week.t,skills:week.skills,tasks:week.tasks.map(task=>`${task.done?'✓ ':''}${task.t}`)}));
+      const response=await apiFetch(API_BASE_URL+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role_key:RK,messages:careerChatHistory,roadmap_context})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.detail||'Gemini could not answer right now.');
+      pending.remove();
+      addCareerChatMessage('assistant',data.reply||'I could not make a reply. Please try again.',data.action);
+      careerChatHistory.push({role:'assistant',content:data.reply||''});
+    }catch(error){
+      pending.remove(); careerChatHistory.pop();
+      addCareerChatMessage('assistant',error.message||'Could not reach the career coach. Please try again.');
+    }finally{send.disabled=false;send.textContent='Send';input.focus();}
+  });
+}
 
 
 async function generatePersonalizedRoadmap(analysis, roleKey, results) {

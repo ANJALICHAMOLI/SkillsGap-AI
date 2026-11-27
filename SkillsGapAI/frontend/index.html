@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <div id="toasts" role="status" aria-live="polite"></div>
@@ -235,8 +235,8 @@
       <p class="muted">Two minutes of setup, then your first gap report.</p>
       <div class="stack" style="margin-top:20px;gap:12px">
         <div class="f2">
-          <label class="field"><span>First name</span><input id="signupFirstName" class="inp" placeholder="First"></label>
-          <label class="field"><span>Last name</span><input id="signupLastName" class="inp" placeholder="Last"></label>
+          <label class="field"><span>First name</span><input id="signupFirstName" class="inp" placeholder="First name" autocomplete="given-name" maxlength="80" required></label>
+          <label class="field"><span>Last name</span><input id="signupLastName" class="inp" placeholder="Last name" autocomplete="family-name" maxlength="80" required></label>
         </div>
         <label class="field"><span>Email</span><input id="signupEmail" class="inp" type="email" placeholder="you@example.com" autocomplete="email" required></label>
         <label class="field"><span>Password</span><input id="signupPassword" class="inp" type="password" placeholder="At least 8 characters" minlength="8" autocomplete="new-password" required></label>
@@ -275,7 +275,8 @@
 <aside class="sidebar">
   <div class="sb-head"><a class="logo" href="#" onclick="showLanding();return false"><span class="mark"><svg><use href="#i-target"/></svg></span>SkillGap</a></div>
   <nav class="sb-nav">
-    <button class="nav-i active" data-go="dashboard"><svg><use href="#i-grid"/></svg>Dashboard</button>
+    <button class="nav-i active" data-go="home"><svg><use href="#i-spark"/></svg>Home</button>
+    <button class="nav-i" data-go="dashboard"><svg><use href="#i-grid"/></svg>Dashboard</button>
     <button class="nav-i" data-go="profile"><svg><use href="#i-user"/></svg>Profile</button>
     <div class="sb-group">Resume</div>
     <button class="nav-i" data-go="builder"><svg><use href="#i-edit"/></svg>Resume builder</button>
@@ -333,7 +334,34 @@
 
   <div class="page-wrap">
 
-  <section class="page active" id="p-dashboard">
+  <section class="page active" id="p-home">
+    <div class="home-kicker"><span class="home-kicker-dot"></span> YOUR NEXT CHAPTER STARTS HERE <span id="homeDate"></span></div>
+    <div class="home-hero">
+      <div class="home-copy">
+        <p class="home-overline">SKILLGAP AI · CAREER STUDIO</p>
+        <h1>Make your<br>next move <em>matter.</em></h1>
+        <p class="home-intro">A clearer path to the work you want. Find your strengths, close the gaps, and build a career that feels like yours.</p>
+        <div class="home-actions"><button class="home-cta" data-go="analyzer">Find my next step <span>↗</span></button><button class="home-text-link" data-go="profile">Set up my profile <span>→</span></button></div>
+        <div class="home-proof"><div class="home-proof-avatars"><span>✳</span><span>↗</span><span>●</span></div><span>Small steps. Serious momentum.</span></div>
+      </div>
+      <div class="home-gallery" aria-label="Career inspiration gallery">
+        <div class="home-gallery-glow"></div>
+        <article class="home-photo home-photo-main"><div class="home-image-track" aria-label="Rotating career inspiration images"><img src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1000&q=85" alt="A creative team sharing ideas around a table"><img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1000&q=85" alt="Colleagues working together on a project"><img src="https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1000&q=85" alt="A bright collaborative workspace"></div><div class="home-photo-shade"></div><div class="home-photo-caption"><span>YOUR NEXT CHAPTER</span><b>Your next chapter<br>is closer than you think.</b></div><span class="home-photo-stamp">SG<br><small>STUDIO</small></span></article>
+        <article class="home-photo home-photo-side"><img src="https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=700&q=85" alt="Colleagues collaborating on a project"><div class="home-photo-shade"></div><span class="home-side-label">GROW WITH INTENTION <b>↗</b></span></article>
+        <div class="home-float-card"><span class="home-float-icon">✦</span><span><b>One skill at a time</b><small>Your path, made personal</small></span><span class="home-float-arrow">↗</span></div>
+        <div class="home-slider-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="home-gallery-counter">IMAGINE <span>·</span> GROW <span>·</span> GO</div>
+      </div>
+    </div>
+    <div class="home-marquee" aria-hidden="true"><div class="home-marquee-track"><span>GROW WITH PURPOSE <b>✳</b> GET CAREER CLARITY <b>✳</b> BUILD WHAT'S NEXT <b>✳</b> GROW WITH PURPOSE <b>✳</b> GET CAREER CLARITY <b>✳</b> BUILD WHAT'S NEXT <b>✳</b></span></div></div>
+    <div class="home-below"><div><p class="home-overline">A GOOD PLACE TO BEGIN</p><h2>What would you like<br>to work on today?</h2></div><div class="home-tiles">
+      <button class="home-tile home-tile-dark" data-go="dashboard"><span class="home-tile-num">01 / YOUR SPACE</span><span class="home-tile-icon">↗</span><b>See your<br>career dashboard</b><small>Your progress, skills, and next milestone.</small></button>
+      <button class="home-tile home-tile-lime" data-go="profile"><span class="home-tile-num">02 / YOUR STORY</span><span class="home-tile-icon">✳</span><b>Make it<br>personal</b><small>Tell us where you are and where you want to go.</small></button>
+      <button class="home-tile home-tile-lilac" data-go="builder"><span class="home-tile-num">03 / MAKE IT REAL</span><span class="home-tile-icon">✎</span><b>Build your<br>next opportunity</b><small>Shape a resume that shows what you can do.</small></button>
+    </div></div>
+  </section>
+
+  <section class="page" id="p-dashboard">
     <div class="page-head">
       <div><h1 id="dashHi">Good evening</h1><p id="dashSub"></p></div>
       <div class="row"><button class="btn btn-sm" data-go="gap">Re-run the gap report</button><button class="btn btn-primary btn-sm" data-go="roadmap" id="dashCont">Continue</button></div>
@@ -344,7 +372,7 @@
   <section class="page" id="p-profile"><div class="page-head">
     <div><h1>Profile</h1><p>This is what the gap report and the roadmap pacing are built from.</p></div>
     <div class="row"><button class="btn btn-sm" onclick="toast('Exported','A JSON copy was prepared.')"><svg><use href="#i-dl"/></svg>Export</button>
-    <button class="btn btn-primary btn-sm" onclick="toast('Saved','Your plan re-balances overnight.')">Save changes</button></div></div>
+    <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save name</button></div></div>
     <div id="profBody"></div>
   </section>
 
@@ -486,26 +514,24 @@
   </section>
 
   <section class="page" id="p-study">
-    <div class="page-head"><div><h1>Study materials</h1><p>Everything here maps to a skill in your gap report. Nothing generic.</p></div>
-      <button class="btn btn-sm" onclick="toast('Saved','Added to your own list.')"><svg><use href="#i-plus"/></svg>Add your own</button></div>
+    <div class="page-head"><div><h1>Study materials</h1><p>Search live web sources for any role, with links returned by Gemini Google Search.</p></div></div>
     <div class="panel" style="margin-bottom:16px">
-      <div class="grid" style="grid-template-columns:1.4fr 1fr 1fr 1fr;gap:11px">
-        <div class="searchbox" style="max-width:none"><svg><use href="#i-search"/></svg><input class="inp" id="stSearch" placeholder="Search the library…"></div>
-        <select class="inp" id="stSkill"></select>
-        <select class="inp" id="stDiff"><option value="">Any difficulty</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select>
-        <select class="inp" id="stDur"><option value="">Any length</option><option>Under 1 hour</option><option>1–4 hours</option><option>Over 4 hours</option></select>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1.4fr auto;gap:11px;align-items:end">
+        <label class="field"><span>Target role</span><input class="inp" id="stRole" maxlength="120" placeholder="e.g. Climate data analyst"></label>
+        <label class="field"><span>Skill (optional)</span><input class="inp" id="stSkill" maxlength="120" placeholder="e.g. Python, carbon accounting"></label>
+        <label class="field"><span>What do you want to learn?</span><input class="inp" id="stSearch" maxlength="200" placeholder="e.g. beginner tutorials and hands-on projects"></label>
+        <button class="btn btn-primary" id="stFetch" type="button" onclick="fetchStudyMaterials()"><svg><use href="#i-search"/></svg>Find materials</button>
       </div>
       <div class="tabs" style="margin:14px 0 0;border-bottom:0" id="stTabs">
-        <button class="tab active" data-t="rec">Recommended</button><button class="tab" data-t="video">Videos</button>
+        <button class="tab active" data-t="all">All sources</button><button class="tab" data-t="video">YouTube</button>
         <button class="tab" data-t="course">Courses</button><button class="tab" data-t="docs">Documentation</button>
         <button class="tab" data-t="article">Articles</button><button class="tab" data-t="practice">Practice</button>
-        <button class="tab" data-t="notes">Notes</button><button class="tab" data-t="project">Projects</button>
       </div>
     </div>
     <div class="between" style="margin-bottom:12px"><span class="muted" style="font-size:13px" id="stCount"></span>
-      <button class="btn btn-quiet btn-sm" onclick="clearStudy()">Clear filters</button></div>
+      <button class="btn btn-quiet btn-sm" onclick="clearStudy()">Clear search</button></div>
     <div class="res-grid" id="stGrid"></div>
-    <div class="empty" id="stEmpty" style="display:none"><h3>Nothing matches those filters</h3><p>Widen the difficulty or clear the search to see the whole library.</p></div>
+    <div class="empty" id="stEmpty"><h3>Find learning materials for your next step</h3><p>Enter any role and optionally a skill, then search to fetch current YouTube and web resources.</p></div>
   </section>
 
   <section class="page" id="p-projects">
@@ -644,6 +670,29 @@
   <div class="row" style="justify-content:flex-end;margin-bottom:9px"><button class="btn btn-sm" onclick="closeModal('mPreview')"><svg><use href="#i-x"/></svg>Close</button></div>
   <div class="paper" id="previewPaper"></div>
 </div></div>
-<script src="app.js"></script>
+<div class="career-chat" id="careerChat">
+  <section class="career-chat-panel" id="careerChatPanel" aria-label="Career coach chat" hidden>
+    <header class="career-chat-header">
+      <div><strong>Career coach</strong><small>Powered by Gemini</small></div>
+      <div class="career-chat-header-actions">
+        <button type="button" id="careerChatClear" aria-label="Clear conversation" title="Clear conversation">Clear</button>
+        <button type="button" id="careerChatClose" aria-label="Close chat">×</button>
+      </div>
+    </header>
+    <div class="career-chat-messages" id="careerChatMessages" aria-live="polite" aria-relevant="additions">
+      <div class="career-chat-message assistant">Hi! I can help you think through your target role, skill gaps, and next steps.</div>
+    </div>
+    <form class="career-chat-form" id="careerChatForm">
+      <label class="sr-only" for="careerChatInput">Message your career coach</label>
+      <textarea id="careerChatInput" rows="2" maxlength="2000" placeholder="Ask about your career next step…"></textarea>
+      <button class="btn btn-primary" type="submit" id="careerChatSend">Send</button>
+    </form>
+    <p class="career-chat-note">Keep personal details out of chat. Your messages are sent to Gemini for a reply.</p>
+  </section>
+  <button type="button" class="career-chat-toggle" id="careerChatToggle" aria-expanded="false" aria-controls="careerChatPanel">
+    <span aria-hidden="true">✦</span> Ask your career coach
+  </button>
+</div>
+<script src="app.js?v=3"></script>
 </body>
 </html>
