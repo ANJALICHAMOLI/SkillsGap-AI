@@ -1138,6 +1138,36 @@ async function apiFetch(url, options = {}) {
   }
   return response;
 }
+function getAuthErrorMessage(data, fallback) {
+  const detail = data?.detail;
+
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item.msg === "string") return item.msg;
+        if (item && typeof item.message === "string") return item.message;
+        if (item && Array.isArray(item.loc)) {
+          return `${item.loc.slice(1).join(".") || "Request"}: invalid value`;
+        }
+        return "";
+      })
+      .filter(Boolean);
+
+    if (messages.length) return messages.join(" ");
+  }
+
+  if (detail && typeof detail === "object" && typeof detail.message === "string") {
+    return detail.message;
+  }
+
+  return fallback;
+}
+
 async function handleLogin() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
@@ -1151,7 +1181,7 @@ async function handleLogin() {
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Login failed.");
+    if (!response.ok) throw new Error(getAuthErrorMessage(data, "Login failed."));
     saveAuthSession(data);
     status.textContent = "Login successful.";
     await openRolePicker(true);
@@ -1177,7 +1207,7 @@ async function handleRegister() {
       body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || "Registration failed.");
+    if (!response.ok) throw new Error(getAuthErrorMessage(data, "Registration failed."));
     saveAuthSession(data);
     applyAccountIdentity();
     status.textContent = "Account created.";
