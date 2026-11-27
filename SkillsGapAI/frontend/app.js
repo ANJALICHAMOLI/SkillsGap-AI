@@ -1142,16 +1142,21 @@ function authApiErrorMessage(data, fallback) {
   const detail = data?.detail;
   if (Array.isArray(detail)) {
     const messages = detail.map(issue => {
-      if (!issue || typeof issue !== "object") return String(issue);
+      if (typeof issue === "string") return issue;
+      if (!issue || typeof issue !== "object") return "";
       const field = Array.isArray(issue.loc)
         ? issue.loc.filter(part => part !== "body").join(".")
         : "";
-      const message = issue.msg || "Invalid value";
+      const message = issue.msg || issue.message || "Invalid value";
       return field ? `${field}: ${message}` : message;
     }).filter(Boolean);
     return messages.join("; ") || fallback;
   }
-  return typeof detail === "string" && detail ? detail : fallback;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") {
+    return detail.message || detail.msg || fallback;
+  }
+  return fallback;
 }
 function authConnectionError(error) {
   if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
@@ -2627,6 +2632,168 @@ async function generatePersonalizedRoadmap(analysis, roleKey, results) {
   }
 }
 
+function renderResumeAnalysis(data) {
+  const matched = data.matched_skills || [];
+  const missing = data.missing_skills || [];
+  const detected = data.detected_skills || [];
+
+  const safeList = (items) =>
+    items?.length
+      ? `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : "<p class='muted'>No information available.</p>";
+
+  const renderBullets = (items) =>
+    items?.length
+      ? `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : "";
+
+  const contact = data.contact_information || {};
+
+  const contactFields = [
+    ["Email", contact.email],
+    ["Phone", contact.phone],
+    ["Location", contact.location],
+    ["LinkedIn", contact.linkedin],
+    ["Portfolio", contact.portfolio]
+  ].filter(([, value]) => value);
+
+  const contactHtml = contactFields.length
+    ? `<h4>Contact information</h4>
+       <ul>
+         ${contactFields.map(([label, value]) =>
+           `<li><b>${label}:</b> ${escapeHtml(value)}</li>`
+         ).join("")}
+       </ul>`
+    : "";
+
+  const experienceHtml = (data.experience || []).map(item => `
+    <div style="margin:12px 0;padding-bottom:12px;border-bottom:1px solid var(--rule)">
+      <h4>${escapeHtml(item.job_title || "Experience")}</h4>
+      <p><b>${escapeHtml(item.company || "")}</b></p>
+      <p class="muted">${escapeHtml(item.duration || "")}</p>
+      ${renderBullets(item.responsibilities)}
+    </div>
+  `).join("");
+
+  const educationHtml = (data.education || []).map(item => `
+    <div style="margin:12px 0;padding-bottom:12px;border-bottom:1px solid var(--rule)">
+      <h4>${escapeHtml(item.degree || "Education")}</h4>
+      <p>${escapeHtml(item.institution || "")}</p>
+      <p class="muted">${escapeHtml(item.duration || "")}</p>
+      ${renderBullets(item.details)}
+    </div>
+  `).join("");
+
+  const projectsHtml = (data.projects || []).map(item => `
+    <div style="margin:12px 0;padding-bottom:12px;border-bottom:1px solid var(--rule)">
+      <h4>${escapeHtml(item.title || "Project")}</h4>
+      <p>${escapeHtml(item.description || "")}</p>
+      ${item.technologies?.length
+        ? `<p><b>Technologies:</b> ${item.technologies.map(escapeHtml).join(", ")}</p>`
+        : ""}
+      ${item.outcomes?.length
+        ? `<b>Outcomes:</b>${renderBullets(item.outcomes)}`
+        : ""}
+    </div>
+  `).join("");
+
+  const certificationsHtml = (data.certifications || []).map(item => `
+    <li>
+      <b>${escapeHtml(item.name || "")}</b>
+      ${item.issuer ? ` — ${escapeHtml(item.issuer)}` : ""}
+      ${item.year ? ` (${escapeHtml(item.year)})` : ""}
+    </li>
+  `).join("");
+
+  const percentage = Math.min(
+    100,
+    Math.max(0, Number(data.match_percentage) || 0)
+  );
+
+  return `
+    <div class="track-card">
+
+      <h3>${escapeHtml(data.role_name || "Your target role")}</h3>
+
+      <p style="margin-top:10px">
+        Skill match: <strong>${percentage}%</strong>
+      </p>
+
+      <div style="height:8px;background:var(--rule);border-radius:8px;margin:10px 0 18px">
+        <div style="height:8px;width:${percentage}%;background:var(--accent, #16a34a);border-radius:8px"></div>
+      </div>
+
+      <h4>Matched skills (${matched.length})</h4>
+      ${safeList(matched)}
+
+      <h4 style="margin-top:14px">Skills to develop (${missing.length})</h4>
+      ${safeList(missing)}
+
+      <h4 style="margin-top:14px">Detected skills (${detected.length})</h4>
+      ${safeList(detected)}
+
+      <p class="muted" style="font-size:12px;margin-top:12px">
+        Analysis mode: ${escapeHtml(data.analysis_mode || "rule_based_fallback")}
+      </p>
+
+      ${contactHtml}
+
+      ${data.professional_summary
+        ? `<h4 style="margin-top:16px">Professional summary</h4>
+           <p>${escapeHtml(data.professional_summary)}</p>`
+        : ""}
+
+      ${experienceHtml
+        ? `<h4 style="margin-top:16px">Work experience</h4>${experienceHtml}`
+        : ""}
+
+      ${educationHtml
+        ? `<h4 style="margin-top:16px">Education</h4>${educationHtml}`
+        : ""}
+
+      ${projectsHtml
+        ? `<h4 style="margin-top:16px">Projects</h4>${projectsHtml}`
+        : ""}
+
+      ${certificationsHtml
+        ? `<h4 style="margin-top:16px">Certifications</h4><ul>${certificationsHtml}</ul>`
+        : ""}
+
+      ${data.experience_highlights?.length
+        ? `<h4 style="margin-top:16px">Experience highlights</h4>${safeList(data.experience_highlights)}`
+        : ""}
+
+      ${data.education_highlights?.length
+        ? `<h4 style="margin-top:16px">Education highlights</h4>${safeList(data.education_highlights)}`
+        : ""}
+
+      ${data.strengths?.length
+        ? `<h4 style="margin-top:16px">Resume strengths</h4>${safeList(data.strengths)}`
+        : ""}
+
+      ${data.improvement_suggestions?.length
+        ? `<h4 style="margin-top:16px">Improvement suggestions</h4>${safeList(data.improvement_suggestions)}`
+        : ""}
+
+      ${data.skill_evidence?.length
+        ? `<h4 style="margin-top:16px">Evidence found in your resume</h4>
+           <ul>
+             ${data.skill_evidence.map(item =>
+               `<li><b>${escapeHtml(item.skill)}</b>: ${escapeHtml(item.evidence)}</li>`
+             ).join("")}
+           </ul>`
+        : ""}
+
+      <button type="button" class="btn btn-primary btn-sm generate-roadmap-btn" style="margin-top:14px">
+        Generate my learning roadmap
+      </button>
+
+      <div class="generated-roadmap"></div>
+
+    </div>
+  `;
+}
+
 const dashboardResumeForm =
   document.getElementById("resumeAnalysisForm");
 
@@ -2688,38 +2855,12 @@ if (dashboardResumeForm) {
 
       status.textContent = "Analysis completed successfully!";
 
-      const safeList = (items) =>
-        items.length
-          ? `<ul>${items.map(skill =>
-              `<li>${escapeHtml(skill)}</li>`
-            ).join("")}</ul>`
-          : "<p>None found.</p>";
+results.innerHTML = renderResumeAnalysis(data);
 
-      results.innerHTML = `
-        <div class="track-card">
-          <h3>${escapeHtml(data.role_name || "Your target role")}</h3>
-          <p style="margin-top:10px">
-            Skill match:
-            <strong>${Number(data.match_percentage) || 0}%</strong>
-          </p>
-          <div style="height:8px;background:var(--rule);border-radius:8px;margin:10px 0 18px">
-            <div style="height:8px;width:${Math.min(100, Math.max(0, Number(data.match_percentage) || 0))}%;background:var(--accent, #16a34a);border-radius:8px"></div>
-          </div>
-          <h4>Matched skills (${matched.length})</h4>
-          ${safeList(matched)}
-          <h4 style="margin-top:14px">Skills to develop (${missing.length})</h4>
-          ${safeList(missing)}
-          <h4 style="margin-top:14px">Skills detected in your resume (${detected.length})</h4>
-          ${safeList(detected)}
-          <p class="muted" style="font-size:12px;margin-top:12px">Analysis mode: ${escapeHtml(data.analysis_mode || "rule_based_fallback")}</p>
-          ${data.professional_summary ? `<h4>AI resume summary</h4><p>${escapeHtml(data.professional_summary)}</p>` : ""}
-          ${data.strengths?.length ? `<h4>Resume strengths</h4>${safeList(data.strengths)}` : ""}
-          ${data.improvement_suggestions?.length ? `<h4>Suggestions</h4>${safeList(data.improvement_suggestions)}` : ""}
-          ${data.skill_evidence?.length ? `<h4>Evidence found in your resume</h4><ul>${data.skill_evidence.map(item => `<li><b>${escapeHtml(item.skill)}</b>: ${escapeHtml(item.evidence)}</li>`).join("")}</ul>` : ""}
-          <button type="button" class="btn btn-primary btn-sm generate-roadmap-btn" style="margin-top:14px">Generate my learning roadmap</button>
-          <div class="generated-roadmap"></div>
-        </div>
-      `;
+results.querySelector(".generate-roadmap-btn")?.addEventListener(
+  "click",
+  () => generatePersonalizedRoadmap(data, roleKey, results)
+);
       results.querySelector(".generate-roadmap-btn")?.addEventListener("click", () => generatePersonalizedRoadmap(data, roleKey, results));
     } catch (error) {
       console.error("Resume analysis error:", error);
@@ -2806,36 +2947,12 @@ if (sidebarForm) {
 
       status.textContent = "Analysis completed successfully!";
 
-      results.innerHTML = `
-        <div class="track-card">
-          <h3>${escapeHtml(data.role_name || "Your target role")}</h3>
+results.innerHTML = renderResumeAnalysis(data);
 
-          <p style="margin-top:10px">
-            Skill match: <strong>${percentage}%</strong>
-          </p>
-
-          <div style="height:8px;background:var(--rule);border-radius:8px;margin:10px 0 18px">
-            <div style="height:8px;width:${percentage}%;background:var(--accent, #16a34a);border-radius:8px"></div>
-          </div>
-
-          <h4>Matched skills (${matched.length})</h4>
-          ${safeList(matched)}
-
-          <h4 style="margin-top:14px">Skills to develop (${missing.length})</h4>
-          ${safeList(missing)}
-
-          <h4 style="margin-top:14px">Detected skills (${detected.length})</h4>
-          ${safeList(detected)}
-
-          <p class="muted" style="font-size:12px;margin-top:12px">Analysis mode: ${escapeHtml(data.analysis_mode || "rule_based_fallback")}</p>
-          ${data.professional_summary ? `<h4>AI resume summary</h4><p>${escapeHtml(data.professional_summary)}</p>` : ""}
-          ${data.strengths?.length ? `<h4>Resume strengths</h4>${safeList(data.strengths)}` : ""}
-          ${data.improvement_suggestions?.length ? `<h4>Suggestions</h4>${safeList(data.improvement_suggestions)}` : ""}
-          ${data.skill_evidence?.length ? `<h4>Evidence found in your resume</h4><ul>${data.skill_evidence.map(item => `<li><b>${escapeHtml(item.skill)}</b>: ${escapeHtml(item.evidence)}</li>`).join("")}</ul>` : ""}
-          <button type="button" class="btn btn-primary btn-sm generate-roadmap-btn" style="margin-top:14px">Generate my learning roadmap</button>
-          <div class="generated-roadmap"></div>
-        </div>
-      `;
+results.querySelector(".generate-roadmap-btn")?.addEventListener(
+  "click",
+  () => generatePersonalizedRoadmap(data, roleKey, results)
+);
       results.querySelector(".generate-roadmap-btn")?.addEventListener("click", () => generatePersonalizedRoadmap(data, roleKey, results));
     } catch (error) {
       console.error("Sidebar resume analysis error:", error);

@@ -71,6 +71,11 @@ def _fallback_analysis(text: str, role_key: str) -> dict:
             "Gemini AI analysis was unavailable, so keyword-based matching was used."
         ],
         "skill_evidence": [],
+        "contact_information": {},
+        "experience": [],
+        "education": [],
+        "projects": [],
+        "certifications": [],
     }
 
 
@@ -130,6 +135,23 @@ def analyze_resume(text: str, role_key: str, role_name: str | None = None) -> di
             "strengths": extracted.strengths,
             "improvement_suggestions": extracted.improvement_suggestions,
             "skill_evidence": evidence_rows,
+            "contact_information": extracted.contact_information.model_dump(),
+
+            "experience": [
+                item.model_dump() for item in extracted.experience
+            ],
+
+            "education": [
+                item.model_dump() for item in extracted.education
+            ],
+
+            "projects": [
+                item.model_dump() for item in extracted.projects
+            ],
+
+            "certifications": [
+                item.model_dump() for item in extracted.certifications
+            ],
         }
 
     except Exception:
