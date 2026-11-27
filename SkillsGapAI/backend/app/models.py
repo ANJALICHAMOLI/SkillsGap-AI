@@ -41,6 +41,16 @@ class User(Base):
     )
 
 
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
 
