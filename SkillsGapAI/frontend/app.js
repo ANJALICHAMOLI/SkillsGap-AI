@@ -1138,36 +1138,32 @@ async function apiFetch(url, options = {}) {
   }
   return response;
 }
-function getAuthErrorMessage(data, fallback) {
+function authApiErrorMessage(data, fallback) {
   const detail = data?.detail;
-
-  if (typeof detail === "string" && detail.trim()) {
-    return detail;
-  }
-
   if (Array.isArray(detail)) {
-    const messages = detail
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item.msg === "string") return item.msg;
-        if (item && typeof item.message === "string") return item.message;
-        if (item && Array.isArray(item.loc)) {
-          return `${item.loc.slice(1).join(".") || "Request"}: invalid value`;
-        }
-        return "";
-      })
-      .filter(Boolean);
-
-    if (messages.length) return messages.join(" ");
+    const messages = detail.map(issue => {
+      if (typeof issue === "string") return issue;
+      if (!issue || typeof issue !== "object") return "";
+      const field = Array.isArray(issue.loc)
+        ? issue.loc.filter(part => part !== "body").join(".")
+        : "";
+      const message = issue.msg || issue.message || "Invalid value";
+      return field ? `${field}: ${message}` : message;
+    }).filter(Boolean);
+    return messages.join("; ") || fallback;
   }
-
-  if (detail && typeof detail === "object" && typeof detail.message === "string") {
-    return detail.message;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (detail && typeof detail === "object") {
+    return detail.message || detail.msg || fallback;
   }
-
   return fallback;
 }
-
+function authConnectionError(error) {
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+    return "Cannot reach the backend. Start the API server and try again.";
+  }
+  return error.message || "Could not connect to the backend.";
+}
 async function handleLogin() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
@@ -1181,12 +1177,12 @@ async function handleLogin() {
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(getAuthErrorMessage(data, "Login failed."));
+    if (!response.ok) throw new Error(authApiErrorMessage(data, "Login failed."));
     saveAuthSession(data);
     status.textContent = "Login successful.";
     await openRolePicker(true);
   } catch (error) {
-    status.textContent = error.message || "Could not connect to the backend.";
+    status.textContent = authConnectionError(error);
   } finally { button.disabled = false; }
 }
 async function handleRegister() {
@@ -1207,13 +1203,13 @@ async function handleRegister() {
       body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(getAuthErrorMessage(data, "Registration failed."));
+    if (!response.ok) throw new Error(authApiErrorMessage(data, "Registration failed."));
     saveAuthSession(data);
     applyAccountIdentity();
     status.textContent = "Account created.";
     await openRolePicker(true);
   } catch (error) {
-    status.textContent = error.message || "Could not connect to the backend.";
+    status.textContent = authConnectionError(error);
   } finally { button.disabled = false; }
 }
 async function handleLogout() {
